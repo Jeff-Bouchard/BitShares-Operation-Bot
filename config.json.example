@@ -1,0 +1,25 @@
+{
+  "agents": {
+    "defaults": {
+      "model": "anthropic/claude-3-5-sonnet",
+      "provider": "openrouter"
+    }
+  },
+  "providers": {
+    "openrouter": {
+      "apiKey": "YOUR_OPENROUTER_API_KEY_HERE"
+    }
+  },
+  "channels": {
+    "telegram": {
+      "enabled": true,
+      "token": "YOUR_TELEGRAM_BOT_TOKEN_FROM_BOTFATHER_HERE",
+      "allowFrom": [
+        "YOUR_TELEGRAM_USER_ID_HERE"
+      ]
+    }
+  },
+  "tools": {
+    "restrictToWorkspace": true
+  }
+}
