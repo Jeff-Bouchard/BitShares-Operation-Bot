@@ -2,7 +2,7 @@
 
 BOB is a specialized AI assistant built on the ultra-lightweight `nanobot` framework, designed exclusively for interacting with the BitShares blockchain. 
 
-BOB can understand natural language requests and construct complex BitShares operations for you. Instead of asking for your private keys, BOB securely generates `beeteos://` deeplinks so you can sign and broadcast transactions safely using your preferred wallet apps (like Beet).
+BOB can understand natural language requests and construct complex BitShares operations for you. Instead of asking for your private keys, BOB securely generates `rawbitshares://` deeplinks so you can sign and broadcast transactions safely using your preferred wallet apps (like Beet).
 
 ## Core Features
 
@@ -47,7 +47,7 @@ Open Telegram, find your bot, and try these commands:
 - "Accept credit offer `1.21.667` for 500 BTS using 1000 XBTSX.WRAM as collateral"
 - "Find the best path to swap BTS for HONEST.MONEY"
 
-BOB will respond with a summary of the operation and a `beeteos://` link. Tap the link on your device to open your wallet and confirm the transaction!
+BOB will respond with a summary of the operation and a `rawbitshares://` link. Tap the link on your device to open your wallet and confirm the transaction!
 
 ## Architecture Details
 

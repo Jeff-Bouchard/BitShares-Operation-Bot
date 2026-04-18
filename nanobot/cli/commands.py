@@ -245,6 +245,7 @@ def _make_provider(config: Config):
 def gateway(
     port: int = typer.Option(18790, "--port", "-p", help="Gateway port"),
     verbose: bool = typer.Option(False, "--verbose", "-v", help="Verbose output"),
+    orchestrator: bool | None = typer.Option(None, "--orchestrator/--no-orchestrator", help="Enable orchestrator mode (Orchestrator style)"),
 ):
     """Start the nanobot gateway."""
     from nanobot.agent.loop import AgentLoop
@@ -263,6 +264,7 @@ def gateway(
     console.print(f"{__logo__} Starting nanobot gateway on port {port}...")
 
     config = load_config()
+    is_orchestrator = config.agents.defaults.is_orchestrator if orchestrator is None else orchestrator
     sync_workspace_templates(config.workspace_path)
     bus = MessageBus()
     provider = _make_provider(config)
@@ -291,6 +293,7 @@ def gateway(
         session_manager=session_manager,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        is_orchestrator=is_orchestrator,
     )
 
     # Set cron callback (needs agent)
@@ -432,6 +435,7 @@ def agent(
     session_id: str = typer.Option("cli:direct", "--session", "-s", help="Session ID"),
     markdown: bool = typer.Option(True, "--markdown/--no-markdown", help="Render assistant output as Markdown"),
     logs: bool = typer.Option(False, "--logs/--no-logs", help="Show nanobot runtime logs during chat"),
+    orchestrator: bool | None = typer.Option(None, "--orchestrator/--no-orchestrator", help="Enable orchestrator mode (Orchestrator style)"),
 ):
     """Interact with the agent directly."""
     from loguru import logger
@@ -442,6 +446,7 @@ def agent(
     from nanobot.cron.service import CronService
 
     config = load_config()
+    is_orchestrator = config.agents.defaults.is_orchestrator if orchestrator is None else orchestrator
     sync_workspace_templates(config.workspace_path)
 
     bus = MessageBus()
@@ -473,6 +478,7 @@ def agent(
         restrict_to_workspace=config.tools.restrict_to_workspace,
         mcp_servers=config.tools.mcp_servers,
         channels_config=config.channels,
+        is_orchestrator=is_orchestrator,
     )
 
     # Show spinner when logs are off (no output to miss); skip when logs are on

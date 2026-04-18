@@ -14,8 +14,10 @@ from loguru import logger
 
 from nanobot.agent.context import ContextBuilder
 from nanobot.agent.memory import MemoryStore
+from nanobot.agent.registry import AgentRegistry
 from nanobot.agent.subagent import SubagentManager
 from nanobot.agent.tools.cron import CronTool
+from nanobot.agent.tools.dispatch import DispatchTool
 from nanobot.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from nanobot.agent.tools.message import MessageTool
 from nanobot.agent.tools.registry import ToolRegistry
@@ -65,6 +67,7 @@ class AgentLoop:
         session_manager: SessionManager | None = None,
         mcp_servers: dict | None = None,
         channels_config: ChannelsConfig | None = None,
+        is_orchestrator: bool = False,
     ):
         from nanobot.config.schema import ExecToolConfig
         self.bus = bus
@@ -82,14 +85,17 @@ class AgentLoop:
         self.exec_config = exec_config or ExecToolConfig()
         self.cron_service = cron_service
         self.restrict_to_workspace = restrict_to_workspace
+        self.is_orchestrator = is_orchestrator
 
         self.context = ContextBuilder(workspace)
         self.sessions = session_manager or SessionManager(workspace)
+        self.registry = AgentRegistry()
         self.tools = ToolRegistry()
         self.subagents = SubagentManager(
             provider=provider,
             workspace=workspace,
             bus=bus,
+            runner=self,
             model=self.model,
             temperature=self.temperature,
             max_tokens=self.max_tokens,
@@ -97,7 +103,8 @@ class AgentLoop:
             brave_api_key=brave_api_key,
             web_proxy=web_proxy,
             exec_config=self.exec_config,
-            restrict_to_workspace=restrict_to_workspace,
+            restrict_to_workspace=self.restrict_to_workspace,
+            registry=self.registry,
         )
 
         self._running = False
@@ -114,6 +121,11 @@ class AgentLoop:
 
     def _register_default_tools(self) -> None:
         """Register the default set of tools."""
+        if self.is_orchestrator:
+            self.tools.register(DispatchTool(manager=self.subagents))
+            self.tools.register(MessageTool(send_callback=self.bus.publish_outbound))
+            return
+
         allowed_dir = self.workspace if self.restrict_to_workspace else None
         for cls in (ReadFileTool, WriteFileTool, EditFileTool, ListDirTool):
             self.tools.register(cls(workspace=self.workspace, allowed_dir=allowed_dir))
@@ -154,7 +166,7 @@ class AgentLoop:
 
     def _set_tool_context(self, channel: str, chat_id: str, message_id: str | None = None) -> None:
         """Update context for all tools that need routing info."""
-        for name in ("message", "spawn", "cron"):
+        for name in ("message", "spawn", "cron", "dispatch"):
             if tool := self.tools.get(name):
                 if hasattr(tool, "set_context"):
                     tool.set_context(channel, chat_id, *([message_id] if name == "message" else []))
@@ -181,19 +193,24 @@ class AgentLoop:
         self,
         initial_messages: list[dict],
         on_progress: Callable[..., Awaitable[None]] | None = None,
+        tools_override: ToolRegistry | None = None,
+        max_iterations_override: int | None = None,
     ) -> tuple[str | None, list[str], list[dict]]:
         """Run the agent iteration loop. Returns (final_content, tools_used, messages)."""
         messages = initial_messages
         iteration = 0
         final_content = None
         tools_used: list[str] = []
+        
+        tools = tools_override or self.tools
+        max_iterations = max_iterations_override or self.max_iterations
 
-        while iteration < self.max_iterations:
+        while iteration < max_iterations:
             iteration += 1
 
             response = await self.provider.chat(
                 messages=messages,
-                tools=self.tools.get_definitions(),
+                tools=tools.get_definitions(),
                 model=self.model,
                 temperature=self.temperature,
                 max_tokens=self.max_tokens,
@@ -228,7 +245,7 @@ class AgentLoop:
                     tools_used.append(tool_call.name)
                     args_str = json.dumps(tool_call.arguments, ensure_ascii=False)
                     logger.info("Tool call: {}({})", tool_call.name, args_str[:200])
-                    result = await self.tools.execute(tool_call.name, tool_call.arguments)
+                    result = await tools.execute(tool_call.name, tool_call.arguments)
                     messages = self.context.add_tool_result(
                         messages, tool_call.id, tool_call.name, result
                     )
@@ -247,10 +264,10 @@ class AgentLoop:
                 final_content = clean
                 break
 
-        if final_content is None and iteration >= self.max_iterations:
-            logger.warning("Max iterations ({}) reached", self.max_iterations)
+        if final_content is None and iteration >= max_iterations:
+            logger.warning("Max iterations ({}) reached", max_iterations)
             final_content = (
-                f"I reached the maximum number of tool call iterations ({self.max_iterations}) "
+                f"I reached the maximum number of tool call iterations ({max_iterations}) "
                 "without completing the task. You can try breaking the task into smaller steps."
             )
 
@@ -343,10 +360,27 @@ class AgentLoop:
             session = self.sessions.get_or_create(key)
             self._set_tool_context(channel, chat_id, msg.metadata.get("message_id"))
             history = session.get_history(max_messages=self.memory_window)
-            messages = self.context.build_messages(
-                history=history,
-                current_message=msg.content, channel=channel, chat_id=chat_id,
-            )
+            
+            # Orchestrator-specific prompt logic
+            if self.is_orchestrator:
+                routing_summary = self.registry.build_routing_summary()
+                dispatch_instr = (
+                    "\n\n## Sub-Agent Fleet\n\n" + routing_summary +
+                    "\n\nUse the `dispatch(agent_id, task)` tool to delegate work. "
+                    "Write clear, complete task descriptions. Include all relevant details. "
+                    "For casual conversation, respond directly without dispatching."
+                )
+                messages = self.context.build_messages(
+                    history=history,
+                    current_message=msg.content + dispatch_instr,
+                    channel=channel, chat_id=chat_id,
+                )
+            else:
+                messages = self.context.build_messages(
+                    history=history,
+                    current_message=msg.content, channel=channel, chat_id=chat_id,
+                )
+                
             final_content, _, all_msgs = await self._run_agent_loop(messages)
             self._save_turn(session, all_msgs, 1 + len(history))
             self.sessions.save(session)
@@ -417,9 +451,23 @@ class AgentLoop:
                 message_tool.start_turn()
 
         history = session.get_history(max_messages=self.memory_window)
+        
+        # Orchestrator-specific prompt logic
+        current_content = msg.content
+        if self.is_orchestrator:
+            routing_summary = self.registry.build_routing_summary()
+            dispatch_instr = (
+                "\n\n## Sub-Agent Fleet\n\n" + routing_summary +
+                "\n\nYou are an orchestrator agent. Use the `dispatch(agent_id, task)` tool to delegate work. "
+                "Write clear, complete task descriptions. Include all relevant details. "
+                "The sub-agent has NO conversation context. "
+                "For casual conversation, respond directly without dispatching."
+            )
+            current_content += dispatch_instr
+
         initial_messages = self.context.build_messages(
             history=history,
-            current_message=msg.content,
+            current_message=current_content,
             media=msg.media if msg.media else None,
             channel=msg.channel, chat_id=msg.chat_id,
         )

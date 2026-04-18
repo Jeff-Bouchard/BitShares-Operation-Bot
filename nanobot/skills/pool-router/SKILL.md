@@ -16,10 +16,10 @@ This skill provides a tool to find the most efficient multi-hop trading path bet
 ## Output Requirements
 When a path is found, the agent should present the result and offer to generate a transaction. The final output for the user should include:
 1.  **Transaction JSON:** A structured BitShares transaction object for the exchange.
-2.  **Deeplink:** A `beeteos://` prefixed link for signing the transaction.
+2.  **Deeplink:** A `rawbitshares://` prefixed link for signing the transaction.
 3.  **Notification:** A placeholder for sending the transaction details to a Telegram bot.
 
-*Note: Use `beeteos://tx/PLACEHOLDER` for the deeplink and `[TELEGRAM_NOTIFICATION_PENDING]` for the notification status.*
+*Note: Use `rawbitshares://tx/PLACEHOLDER` for the deeplink and `[TELEGRAM_NOTIFICATION_PENDING]` for the notification status.*
 
 ## Requirements
 ...

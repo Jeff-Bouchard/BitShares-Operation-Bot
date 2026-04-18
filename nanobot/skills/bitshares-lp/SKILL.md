@@ -29,4 +29,3 @@ python3 /path/to/skill/fetch_pool.py 1.19.0 1.19.48 --log
 
 ## Data Location
 The historical data is stored in `lp_yield_history.csv` within the skill directory. APR calculations require at least two data points for a given pool.
-The script's directory is: `/home/jrc/Downloads/Appimage/DECDEUS/Q4-Apps/LPskill/nanobot-main(1)/nanobot-main/nanobot/skills/bitshares-lp/`

@@ -19,7 +19,7 @@ This skill allows BOB to perform various operations on the BitShares blockchain,
 
 ### General Operations Tool
 
-Use `ops.py` to construct operations and generate `beeteos://` deeplinks.
+Use `ops.py` to construct operations and generate `rawbitshares://` deeplinks.
 
 ```bash
 python3 /path/to/skill/ops.py --op OPERATION [args]
@@ -40,10 +40,10 @@ The tool outputs a JSON object containing a `summary`, the full `tx` (transactio
   "operation": "transfer",
   "summary": "Transfer 10.0 BTS from account1 to account2",
   "tx": { ... },
-  "deeplink": "beeteos://tx/..."
+  "deeplink": "rawbitshares://tx/..."
 }
 ```
 
 ## Internal Note
-Always offer a `beeteos://` deeplink when an operation is requested. 
+Always offer a `rawbitshares://` deeplink when an operation is requested. 
 If `--mock` is used, the output will use placeholder data for block headers and account IDs.

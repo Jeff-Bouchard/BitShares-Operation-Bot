@@ -42,11 +42,11 @@ def construct_tx(client, ops):
 def generate_deeplink(tx):
     import base64
     tx_json = json.dumps(tx)
-    # BitShares deeplink format often uses beeteos://tx/base64(json)
+    # BitShares deeplink format uses rawbitshares://tx/base64(json)
     # or just the json string if handled by a specific app.
     # For now, we'll provide a clear instruction and the JSON.
     encoded = base64.b64encode(tx_json.encode()).decode()
-    return f"beeteos://tx/{encoded}"
+    return f"rawbitshares://tx/{encoded}"
 
 def main():
     parser = argparse.ArgumentParser(description="BOB BitShares Operations Tool")
